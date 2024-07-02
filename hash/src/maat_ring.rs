@@ -10,7 +10,7 @@ pub trait MaatRing {
 
     fn route(&self, request: &dyn Request) -> Box<dyn MaatNode>;
 
-    fn hash(&self, data: &dyn Serializable) -> String;
+    fn hash(&self, data: &dyn Serializable) -> usize;
 }
 
 pub trait Serializable {
@@ -65,7 +65,7 @@ impl MaatRing for DefaultMaatRing {
         todo!()
     }
 
-    fn hash(&self, data: &dyn Serializable) -> String {
+    fn hash(&self, data: &dyn Serializable) -> usize {
         todo!()
     }
 }
