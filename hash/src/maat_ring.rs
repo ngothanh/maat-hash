@@ -10,7 +10,7 @@ pub trait MaatRing {
 
     fn route(&self, request: &dyn Request) -> Box<dyn MaatNode>;
 
-    fn hash(&self, data: &dyn Serializable) -> usize;
+    fn hash<T: Serializable>(&self, data: &T) -> u64;
 }
 
 pub trait Serializable {
@@ -62,10 +62,11 @@ impl MaatRing for DefaultMaatRing {
     }
 
     fn route(&self, request: &dyn Request) -> Box<dyn MaatNode> {
-        todo!()
+        let hash = self.hash(request);
+        self.ring.find_nearest(hash)
     }
 
-    fn hash(&self, data: &dyn Serializable) -> usize {
-        todo!()
+    fn hash<T: Serializable>(&self, data: &T) -> u64 {
+        self.ring.get_hash_fn()(data)
     }
 }
