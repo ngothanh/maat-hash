@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-
 use crate::maat_node::MaatNode;
 use crate::ring_buffer::RingBuffer;
 
