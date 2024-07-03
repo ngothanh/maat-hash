@@ -8,10 +8,12 @@ pub trait MaatRing {
 
     fn remove(&mut self, node: Box<dyn MaatNode>);
 
-    fn route(&self, request: &dyn Request) -> Box<dyn MaatNode>;
+    fn route(&self, request: &dyn Request) -> Result<Box<dyn MaatNode>, NotFound>;
 
     fn hash<T: Serializable>(&self, data: &T) -> usize;
 }
+
+pub struct NotFound;
 
 pub trait Serializable {
     fn serialize(&self) -> String;
@@ -33,9 +35,9 @@ struct DefaultMaatRing {
 }
 
 impl DefaultMaatRing {
-    fn pick(&self, nodes: Vec<Box<dyn MaatNode>>) -> Box<dyn MaatNode> {
+    fn pick(&self, nodes: &Vec<Box<dyn MaatNode>>) -> Box<dyn MaatNode> {
         if nodes.len() == 1 {
-            return nodes.into_iter().next().unwrap();
+            return nodes[0].clone();
         }
 
         let mut physical_node_ids = HashSet::new();
@@ -114,10 +116,13 @@ impl MaatRing for DefaultMaatRing {
             );
     }
 
-    fn route(&self, request: &dyn Request) -> Box<dyn MaatNode> {
+    fn route(&self, request: &dyn Request) -> Result<Box<dyn MaatNode>, NotFound> {
         let hash = self.hash(request);
-        let available_nodes = self.ring.find_nearest(hash);
-        self.pick(available_nodes)
+        if let Some(available_nodes) = self.ring.find_nearest(hash).unwrap() {
+            return Ok(self.pick(available_nodes));
+        }
+
+        return Err(NotFound);
     }
 
     fn hash<T: Serializable>(&self, data: &T) -> usize {
