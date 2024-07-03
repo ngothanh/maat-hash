@@ -30,6 +30,12 @@ struct DefaultMaatRing {
     node_indices: HashMap<String, Box<dyn MaatNode>>,
 }
 
+impl DefaultMaatRing {
+    fn pick(&self, nodes: Vec<Box<dyn MaatNode>>) -> Box<dyn MaatNode> {
+        todo!()
+    }
+}
+
 impl MaatRing for DefaultMaatRing {
     fn accept(&mut self, node: Box<dyn MaatNode>) {
         for _ in 0..self.replicas {
@@ -62,7 +68,8 @@ impl MaatRing for DefaultMaatRing {
 
     fn route(&self, request: &dyn Request) -> Box<dyn MaatNode> {
         let hash = self.hash(request);
-        self.ring.find_nearest(hash)
+        let available_nodes = self.ring.find_nearest(hash);
+        self.pick(available_nodes)
     }
 
     fn hash<T: Serializable>(&self, data: &T) -> usize {

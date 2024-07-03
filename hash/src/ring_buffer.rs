@@ -6,7 +6,7 @@ pub trait RingBuffer<T: Serializable + Clone> {
 
     fn remove(&mut self, data: T);
 
-    fn find_nearest(&self, hash: usize) -> T;
+    fn find_nearest(&self, hash: usize) -> Vec<T>;
 
     fn get_hash_fn(&self) -> Box<dyn Fn(&dyn Serializable) -> usize>;
 }
@@ -38,7 +38,7 @@ impl<T: Serializable + Clone> RingBuffer<T> for InMemoryRingBuffer<T> {
         todo!()
     }
 
-    fn find_nearest(&self, hash: usize) -> T {
+    fn find_nearest(&self, hash: usize) -> Vec<T> {
         todo!()
     }
 
