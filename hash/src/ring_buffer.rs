@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::hash::DefaultHasher;
 use crate::maat_ring::Serializable;
 
 pub trait RingBuffer<T: Serializable + Clone + Eq> {
@@ -57,6 +58,14 @@ impl<T: Serializable + Clone + Eq> RingBuffer<T> for InMemoryRingBuffer<T> {
     }
 
     fn get_hash_fn(&self) -> Box<dyn Fn(&dyn Serializable) -> usize> {
-        todo!()
+        let f = |obj: &dyn Serializable| {
+            let s = obj.serialize();
+            let mut hasher = DefaultHasher::new();
+            s.hash(&mut hasher);
+            let i = hasher.finish() as usize;
+            i % self.size
+        };
+
+        Box::new(f)
     }
 }
