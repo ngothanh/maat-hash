@@ -2,16 +2,14 @@ use uuid::Uuid;
 use crate::maat_ring::Serializable;
 
 pub trait MaatNode: Serializable {
-    fn replicate(&self) -> Box<dyn MaatNode>;
+    fn replicate(&self) -> impl MaatNode;
 
     fn get_id(&self) -> String;
 
     fn is_physical(&self) -> bool;
-
-    fn clone_box(&self) -> Box<dyn MaatNode>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Server {
     ip: String,
     port: usize,
@@ -36,20 +34,12 @@ impl Serializable for Server {
     }
 }
 
-impl Clone for Box<dyn MaatNode> {
-    fn clone(&self) -> Box<dyn MaatNode> {
-        self.clone_box()
-    }
-}
-
 impl MaatNode for Server {
-    fn replicate(&self) -> Box<dyn MaatNode> {
-        Box::new(
-            Server::new(
-                self.ip.clone(),
-                self.port,
-                false,
-            )
+    fn replicate(&self) -> Server {
+        Server::new(
+            self.ip.clone(),
+            self.port,
+            false,
         )
     }
 
@@ -59,9 +49,5 @@ impl MaatNode for Server {
 
     fn is_physical(&self) -> bool {
         self.is_physical
-    }
-
-    fn clone_box(&self) -> Box<dyn MaatNode> {
-        Box::new(self.clone())
     }
 }

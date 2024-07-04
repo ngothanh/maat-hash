@@ -1,15 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use rand::thread_rng;
-use crate::maat_node::MaatNode;
+use crate::maat_node::{MaatNode, Server};
 use crate::ring_buffer::RingBuffer;
 use rand::seq::SliceRandom;
 
 pub trait MaatRing {
-    fn accept(&mut self, node: Box<dyn MaatNode>);
+    fn accept(&mut self, node: Server);
 
-    fn remove(&mut self, node: Box<dyn MaatNode>);
+    fn remove(&mut self, node: Server);
 
-    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Box<dyn MaatNode>, NotFound>;
+    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Server, NotFound>;
 
     fn hash<T: Serializable>(&self, data: &T) -> usize;
 }
@@ -57,15 +57,15 @@ impl<T: Serializable> Wrapper<T> for Request<T> {
 
 
 struct DefaultMaatRing {
-    ring: Box<dyn RingBuffer<Box<dyn MaatNode>>>,
+    ring: Box<dyn RingBuffer<Server>>,
     replicas: usize,
     node_replicas_indices: HashMap<String, HashSet<String>>,
     replica_node_indices: HashMap<String, String>,
-    node_indices: HashMap<String, Box<dyn MaatNode>>,
+    node_indices: HashMap<String, Server>,
 }
 
 impl DefaultMaatRing {
-    fn pick(&self, nodes: &Vec<Box<dyn MaatNode>>) -> Box<dyn MaatNode> {
+    fn pick(&self, nodes: &Vec<Server>) -> Server {
         if nodes.len() == 1 {
             return nodes[0].clone();
         }
@@ -105,7 +105,7 @@ impl DefaultMaatRing {
 }
 
 impl MaatRing for DefaultMaatRing {
-    fn accept(&mut self, node: Box<dyn MaatNode>) {
+    fn accept(&mut self, node: Server) {
         let node_id = node.get_id();
         for _ in 0..self.replicas {
             let replicated_node = node.replicate();
@@ -124,12 +124,11 @@ impl MaatRing for DefaultMaatRing {
         self.ring.add(&node);
     }
 
-    fn remove(&mut self, node: Box<dyn MaatNode>) {
+    fn remove(&mut self, node: Server) {
         let node_id = node.get_id();
         let replica_ids = self.node_replicas_indices.get(&node_id).unwrap().clone();
-        let replicas = replica_ids.iter()
-            .map(|id| { self.node_indices.get(id) }
-            )
+        let replicas: Vec<Server> = replica_ids.into_iter()
+            .map(|id| { self.node_indices.get(&id).unwrap() }.clone())
             .collect();
         self.ring.remove(&node);
         self.node_replicas_indices.remove(&node_id);
@@ -139,13 +138,13 @@ impl MaatRing for DefaultMaatRing {
                 |replica| {
                     let replica_id = replica.get_id();
                     self.ring.remove(replica);
-                    self.replica_node_indices.remove(replica_id.clone());
-                    self.node_indices.remove(replica_id.clone());
+                    self.replica_node_indices.remove(&replica_id.clone());
+                    self.node_indices.remove(&replica_id.clone());
                 }
             );
     }
 
-    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Box<dyn MaatNode>, NotFound> {
+    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Server, NotFound> {
         let hash = self.hash(request);
         if let Some(available_nodes) = self.ring.find_nearest(hash) {
             return Ok(self.pick(available_nodes));
