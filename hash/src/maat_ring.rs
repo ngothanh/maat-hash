@@ -8,7 +8,7 @@ pub trait MaatRing {
 
     fn remove(&mut self, node: Box<dyn MaatNode>);
 
-    fn route(&self, request: &dyn Request) -> Result<Box<dyn MaatNode>, NotFound>;
+    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Box<dyn MaatNode>, NotFound>;
 
     fn hash<T: Serializable>(&self, data: &T) -> usize;
 }
@@ -19,10 +19,31 @@ pub trait Serializable {
     fn serialize(&self) -> String;
 }
 
-pub trait Request: Serializable {
-    fn of<T>(data: T) -> Self
+pub trait Wrapper<T>: Serializable {
+    fn of(data: T) -> Self
     where
         Self: Sized;
+}
+
+pub struct Request<T> {
+    data: T,
+}
+
+impl<T: Serializable> Serializable for Request<T> {
+    fn serialize(&self) -> String {
+        let serialized_data = self.data.serialize();
+
+        format!("[{}]", serialized_data)
+    }
+}
+
+impl<T: Serializable> Wrapper<T> for Request<T> {
+    fn of(data: T) -> Self
+    where
+        Self: Sized,
+    {
+        Request { data }
+    }
 }
 
 
@@ -48,20 +69,20 @@ impl DefaultMaatRing {
             }
 
             let virtual_node_id = node.get_id();
-            let physical_node_id = self.replica_node_indices[virtual_node_id];
+            let physical_node_id = self.replica_node_indices[&virtual_node_id].clone();
             physical_node_ids.insert(physical_node_id);
         }
 
         if physical_node_ids.len() == 1 {
             let physical_node_id = physical_node_ids.into_iter().next().unwrap();
-            return self.node_indices[physical_node_id];
+            return self.node_indices[&physical_node_id].clone();
         }
 
         let random_physical_node_id = Self::shuffle_set(&physical_node_ids)
             .into_iter()
             .next()
             .unwrap();
-        return self.node_indices[random_physical_node_id];
+        return self.node_indices[&random_physical_node_id].clone();
     }
 
     fn shuffle_set(input_set: &HashSet<String>) -> Vec<String> {
@@ -116,9 +137,9 @@ impl MaatRing for DefaultMaatRing {
             );
     }
 
-    fn route(&self, request: &dyn Request) -> Result<Box<dyn MaatNode>, NotFound> {
+    fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Box<dyn MaatNode>, NotFound> {
         let hash = self.hash(request);
-        if let Some(available_nodes) = self.ring.find_nearest(hash).unwrap() {
+        if let Some(available_nodes) = self.ring.find_nearest(hash) {
             return Ok(self.pick(available_nodes));
         }
 

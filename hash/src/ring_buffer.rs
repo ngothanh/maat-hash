@@ -69,3 +69,43 @@ impl<T: Serializable + Clone + Eq> RingBuffer<T> for InMemoryRingBuffer<T> {
         Box::new(f)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::maat_ring::{Request, Serializable, Wrapper};
+    use crate::ring_buffer::{InMemoryRingBuffer, RingBuffer};
+
+    struct TestData {
+        content: String,
+    }
+
+    impl Serializable for TestData {
+        fn serialize(&self) -> String {
+            self.content.clone()
+        }
+    }
+
+    impl TestData {
+        fn new(content: String) -> TestData {
+            TestData { content }
+        }
+    }
+
+    #[test]
+    fn given_ring_buffer_when_adding_new_item_then_item_was_added_to_the_correct_index() {
+        //given
+        let mut ring_buffer: dyn RingBuffer<Request<TestData>> = InMemoryRingBuffer::new(
+            1000
+        );
+
+        let data = Request::of(TestData::new(String::from("I'm good")));
+
+        //when
+        ring_buffer.add(data);
+
+        //then
+        let hash = ring_buffer.get_hash_fn()(&data);
+        let found_data = ring_buffer.find_nearest(hash).unwrap().clone();
+        assert!(found_data.contains(&data))
+    }
+}
