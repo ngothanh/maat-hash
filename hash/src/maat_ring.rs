@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use rand::thread_rng;
 use crate::maat_node::MaatNode;
 use crate::ring_buffer::RingBuffer;
+use rand::seq::SliceRandom;
 
 pub trait MaatRing {
     fn accept(&mut self, node: Box<dyn MaatNode>);
@@ -110,18 +111,17 @@ impl MaatRing for DefaultMaatRing {
             let replicated_node = node.replicate();
             let id = replicated_node.get_id();
 
-            self.ring.add(replicated_node.clone());
-            self.node_indices.insert(id.clone(), replicated_node.clone());
+            self.ring.add(&replicated_node);
 
             self.node_replicas_indices
                 .entry(id.clone())
                 .or_insert_with(HashSet::new)
                 .insert(id.clone());
-            self.replica_node_indices.insert(id.clone(), node_id.clone())
+            self.replica_node_indices.insert(id.clone(), node_id.clone());
         }
 
         self.node_indices.insert(node_id.clone(), node.clone());
-        self.ring.add(node);
+        self.ring.add(&node);
     }
 
     fn remove(&mut self, node: Box<dyn MaatNode>) {
@@ -131,7 +131,7 @@ impl MaatRing for DefaultMaatRing {
             .map(|id| { self.node_indices.get(id) }
             )
             .collect();
-        self.ring.remove(node);
+        self.ring.remove(&node);
         self.node_replicas_indices.remove(&node_id);
         self.node_indices.remove(&node_id);
         replicas.iter()
