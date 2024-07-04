@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
 use std::hash::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use crate::maat_ring::Serializable;
 
 pub trait RingBuffer<T: Serializable + Clone + Eq> {
-    fn add(&mut self, data: T);
+    fn add(&mut self, data: &T);
 
-    fn remove(&mut self, data: T);
+    fn remove(&mut self, data: &T);
 
     fn find_nearest(&self, hash: usize) -> Option<&Vec<T>>;
 
-    fn get_hash_fn(&self) -> Box<dyn Fn(&dyn Serializable) -> usize>;
+    fn get_hash_fn(&self) -> Box<dyn Fn(&(dyn Serializable + '_)) -> usize + '_>;
 }
 
 pub struct InMemoryRingBuffer<T> {
@@ -21,7 +23,7 @@ impl<T> InMemoryRingBuffer<T> {
     fn new(capacity: usize) -> Self {
         let mut storage = BTreeMap::new();
         for i in 0..capacity {
-            storage.insert(i, Vec::new())
+            storage.insert(i, Vec::new());
         }
         InMemoryRingBuffer {
             storage,
@@ -30,18 +32,18 @@ impl<T> InMemoryRingBuffer<T> {
     }
 }
 
-impl<T: Serializable + Clone + Eq> RingBuffer<T> for InMemoryRingBuffer<T> {
-    fn add(&mut self, data: T) {
-        let idx = self.get_hash_fn()(&data);
-        self.storage.get(&idx).unwrap().push(data);
+impl<T: Serializable + Eq + Clone> RingBuffer<T> for InMemoryRingBuffer<T> {
+    fn add(&mut self, data: &T) {
+        let idx = self.get_hash_fn()(data);
+        self.storage.get_mut(&idx).unwrap().push(data.clone());
     }
 
-    fn remove(&mut self, data: T) {
-        let idx = self.get_hash_fn()(&data);
-        let found = self.storage.get_mut(&idx).unwrap();
-        if let Some(pos) = found.iter()
-            .position(|node| { *node == data }) {
-            found.remove(pos)
+    fn remove(&mut self, data: &T) {
+        let idx = self.get_hash_fn()(data);
+        if let Some(found) = self.storage.get_mut(&idx) {
+            if let Some(pos) = found.iter().position(|node| node == data) {
+                found.remove(pos);
+            }
         }
     }
 
@@ -57,8 +59,8 @@ impl<T: Serializable + Clone + Eq> RingBuffer<T> for InMemoryRingBuffer<T> {
         return None;
     }
 
-    fn get_hash_fn(&self) -> Box<dyn Fn(&dyn Serializable) -> usize> {
-        let f = |obj: &dyn Serializable| {
+    fn get_hash_fn(&self) -> Box<dyn Fn(&(dyn Serializable + '_)) -> usize + '_> {
+        let f = |obj: &(dyn Serializable + '_)| {
             let s = obj.serialize();
             let mut hasher = DefaultHasher::new();
             s.hash(&mut hasher);
@@ -72,7 +74,7 @@ impl<T: Serializable + Clone + Eq> RingBuffer<T> for InMemoryRingBuffer<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::maat_ring::{Request, Serializable, Wrapper};
+    use crate::maat_ring::Serializable;
     use crate::ring_buffer::{InMemoryRingBuffer, RingBuffer};
 
     struct TestData {
@@ -85,27 +87,38 @@ mod tests {
         }
     }
 
+    impl PartialEq<Self> for TestData {
+        fn eq(&self, other: &Self) -> bool {
+            self.content.eq(&other.content)
+        }
+    }
+
+    impl Eq for TestData {}
+
     impl TestData {
         fn new(content: String) -> TestData {
             TestData { content }
         }
     }
+    impl Clone for TestData {
+        fn clone(&self) -> Self {
+            TestData::new(self.content.clone())
+        }
+    }
 
     #[test]
     fn given_ring_buffer_when_adding_new_item_then_item_was_added_to_the_correct_index() {
-        //given
-        let mut ring_buffer: dyn RingBuffer<Request<TestData>> = InMemoryRingBuffer::new(
-            1000
-        );
+        // Given
+        let mut ring_buffer: InMemoryRingBuffer<TestData> = InMemoryRingBuffer::new(1000);
 
-        let data = Request::of(TestData::new(String::from("I'm good")));
+        let data = TestData::new(String::from("I'm good"));
 
-        //when
-        ring_buffer.add(data);
+        // When
+        ring_buffer.add(&data);
 
-        //then
+        // Then
         let hash = ring_buffer.get_hash_fn()(&data);
-        let found_data = ring_buffer.find_nearest(hash).unwrap().clone();
-        assert!(found_data.contains(&data))
+        let found_data = ring_buffer.find_nearest(hash).unwrap();
+        assert!(found_data.contains(&data));
     }
 }
