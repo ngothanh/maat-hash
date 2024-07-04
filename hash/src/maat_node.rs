@@ -9,7 +9,7 @@ pub trait MaatNode: Serializable {
     fn is_physical(&self) -> bool;
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Server {
     ip: String,
     port: usize,

@@ -1,8 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+
+use rand::seq::SliceRandom;
 use rand::thread_rng;
+
 use crate::maat_node::{MaatNode, Server};
 use crate::ring_buffer::RingBuffer;
-use rand::seq::SliceRandom;
 
 pub trait MaatRing {
     fn accept(&mut self, node: Server);
@@ -65,9 +68,9 @@ struct DefaultMaatRing {
 }
 
 impl DefaultMaatRing {
-    fn pick(&self, nodes: &Vec<Server>) -> Server {
+    fn pick(&self, nodes: &HashSet<Server>) -> Server {
         if nodes.len() == 1 {
-            return nodes[0].clone();
+            return nodes.into_iter().next().unwrap().clone();
         }
 
         let mut physical_node_ids = HashSet::new();
