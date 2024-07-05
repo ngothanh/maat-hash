@@ -8,9 +8,9 @@ use crate::maat_node::{MaatNode, Server};
 use crate::ring_buffer::{InMemoryRingBuffer, RingBuffer};
 
 pub trait MaatRing {
-    fn accept(&mut self, node: Server);
+    fn accept(&mut self, node: &Server);
 
-    fn remove(&mut self, node: Server);
+    fn remove(&mut self, node: &Server);
 
     fn route<T: Serializable>(&self, request: &Request<T>) -> Result<Server, NotFound>;
 
@@ -72,10 +72,6 @@ impl DefaultMaatRing {
     }
 
     fn pick(&self, nodes: &HashSet<Server>) -> Server {
-        if nodes.len() == 1 {
-            return nodes.into_iter().next().unwrap().clone();
-        }
-
         let mut physical_node_ids = HashSet::new();
         for node in nodes {
             if node.is_physical() {
@@ -111,26 +107,27 @@ impl DefaultMaatRing {
 }
 
 impl MaatRing for DefaultMaatRing {
-    fn accept(&mut self, node: Server) {
+    fn accept(&mut self, node: &Server) {
         let node_id = node.get_id();
         for _ in 0..self.replicas {
             let replicated_node = node.replicate();
-            let id = replicated_node.get_id();
+            let replica_id = replicated_node.get_id();
 
             self.ring.add(&replicated_node);
 
             self.node_replicas_indices
-                .entry(id.clone())
+                .entry(node_id.clone())
                 .or_insert_with(HashSet::new)
-                .insert(id.clone());
-            self.replica_node_indices.insert(id.clone(), node_id.clone());
+                .insert(replica_id.clone());
+            self.replica_node_indices.insert(replica_id.clone(), node_id.clone());
+            self.node_indices.insert(replica_id.clone(), replicated_node.clone());
         }
 
-        self.node_indices.insert(node_id.clone(), node.clone());
         self.ring.add(&node);
+        self.node_indices.insert(node_id.clone(), node.clone());
     }
 
-    fn remove(&mut self, node: Server) {
+    fn remove(&mut self, node: &Server) {
         let node_id = node.get_id();
         let replica_ids = self.node_replicas_indices.get(&node_id).unwrap().clone();
         let replicas: Vec<Server> = replica_ids.into_iter()
@@ -188,15 +185,15 @@ mod tests {
     }
 
     #[test]
-    fn give_maat_ring_when_new_node_join_then_the_request_was_correctly_routed_to_this_node() {
+    fn give_maat_ring_with_single_node_when_new_node_join_then_the_request_was_correctly_routed_to_this_node() {
         //given
-        let mut ring = DefaultMaatRing::new(100, 10);
+        let mut ring = DefaultMaatRing::new(100, 0);
         let server = Server::new(
             String::from("1.1.1.1"),
             61,
             true,
         );
-        ring.accept(server);
+        ring.accept(&server);
 
         let payload = Payload::new(String::from("test"));
         let request = Request::of(payload);
@@ -205,5 +202,67 @@ mod tests {
         let result = ring.route(&request);
 
         //then
+        assert!(result.is_ok());
+        match result {
+            Ok(found) => { assert!(found == server) }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn give_maat_ring_with_single_node_and_replicas_when_new_node_join_then_the_request_was_correctly_routed_to_this_node() {
+        //given
+        let mut ring = DefaultMaatRing::new(100, 10);
+        let server = Server::new(
+            String::from("1.10.11.12"),
+            61,
+            true,
+        );
+        ring.accept(&server);
+
+        let payload = Payload::new(String::from("test"));
+        let request = Request::of(payload);
+
+        //when
+        let result = ring.route(&request);
+
+        //then
+        assert!(result.is_ok());
+        match result {
+            Ok(found) => { assert!(found == server) }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn give_maat_ring_with_two_nodes_and_replicas_when_one_node_left_then_the_request_was_correctly_routed_to_another_node() {
+        //given
+        let mut ring = DefaultMaatRing::new(10, 1);
+        let server1 = Server::new(
+            String::from("1.10.11.12"),
+            61,
+            true,
+        );
+        let server2 = Server::new(
+            String::from("1.10.11.14"),
+            61,
+            true,
+        );
+        ring.accept(&server1);
+        ring.accept(&server2);
+
+        let payload = Payload::new(String::from("test"));
+        let request = Request::of(payload);
+
+        //when
+        ring.remove(&server2);
+        let result = ring.route(&request);
+
+        //then
+        assert!(result.is_ok());
+        match result {
+            Ok(found) => { assert!(found == server1) }
+            Err(_) => {}
+        }
     }
 }

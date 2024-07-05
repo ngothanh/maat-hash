@@ -61,7 +61,7 @@ impl<T: Serializable + Eq + Clone + Hash> RingBuffer<T> for InMemoryRingBuffer<T
             return Some(vec);
         }
 
-        return None;
+        Some(self.storage.iter().next().unwrap().1)
     }
 
     fn get_hash_fn(&self) -> Box<dyn Fn(&(dyn Serializable + '_)) -> usize + '_> {
