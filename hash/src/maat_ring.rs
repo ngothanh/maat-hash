@@ -33,14 +33,6 @@ pub struct Request<T> {
     data: T,
 }
 
-impl<T: Eq> PartialEq<Self> for Request<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.data.eq(&other.data)
-    }
-}
-
-impl<T: Eq> Eq for Request<T> {}
-
 impl<T: Serializable> Serializable for Request<T> {
     fn serialize(&self) -> String {
         let serialized_data = self.data.serialize();
