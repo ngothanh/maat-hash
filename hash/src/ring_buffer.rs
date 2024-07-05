@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
-use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::hash::DefaultHasher;
 
 use crate::maat_ring::Serializable;
 
@@ -22,9 +22,6 @@ pub struct InMemoryRingBuffer<T> {
 impl<T> InMemoryRingBuffer<T> {
     fn new(capacity: usize) -> Self {
         let mut storage = BTreeMap::new();
-        for i in 0..capacity {
-            storage.insert(i, HashSet::new());
-        }
         InMemoryRingBuffer {
             storage,
             size: capacity,
@@ -35,21 +32,29 @@ impl<T> InMemoryRingBuffer<T> {
 impl<T: Serializable + Eq + Clone + Hash> RingBuffer<T> for InMemoryRingBuffer<T> {
     fn add(&mut self, data: &T) {
         let idx = self.get_hash_fn()(data);
-        self.storage.get_mut(&idx).unwrap().insert(data.clone());
+        self.storage.entry(idx)
+            .or_insert_with(HashSet::new)
+            .insert(data.clone());
     }
 
     fn remove(&mut self, data: &T) {
         let idx = self.get_hash_fn()(data);
+        let mut need_clear = false;
         if let Some(found) = self.storage.get_mut(&idx) {
             found.remove(data);
+            if found.is_empty() {
+                need_clear = true;
+            }
+        }
+
+        if need_clear {
+            self.storage.remove(&idx);
         }
     }
 
     fn find_nearest(&self, hash: usize) -> Option<&HashSet<T>> {
         if let Some(vec) = self.storage.get(&hash) {
-            if !vec.is_empty() {
-                return Some(vec);
-            }
+            return Some(vec);
         }
 
         if let Some((_, vec)) = self.storage.range(hash + 1..).next() {
@@ -146,8 +151,8 @@ mod tests {
 
         // Then
         let hash = ring_buffer.get_hash_fn()(&data);
-        let found_data = ring_buffer.find_nearest(hash).unwrap();
-        assert_eq!(found_data.len(), 0);
+        let found_data = ring_buffer.find_nearest(hash);
+        assert!(found_data.is_none())
     }
 
     #[test]
@@ -158,10 +163,14 @@ mod tests {
         let data1 = TestData::new(String::from("To be deleted"));
         let data2 = TestData::new(String::from("To be fucking deleted"));
 
+        ring_buffer.add(&data1);
+        ring_buffer.add(&data2);
+
         // When
-        let found = ring_buffer.find_nearest(735).unwrap().clone();
+        let found = ring_buffer.find_nearest(735);
 
         // Then
-        assert!(found.contains(&data2));
+        assert!(found.is_some());
+        assert!(found.unwrap().contains(&data2));
     }
 }
