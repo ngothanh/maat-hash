@@ -20,7 +20,7 @@ pub struct InMemoryRingBuffer<T> {
 }
 
 impl<T> InMemoryRingBuffer<T> {
-    fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize) -> Self {
         let mut storage = BTreeMap::new();
         InMemoryRingBuffer {
             storage,

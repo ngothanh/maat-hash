@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 use crate::maat_node::{MaatNode, Server};
-use crate::ring_buffer::RingBuffer;
+use crate::ring_buffer::{InMemoryRingBuffer, RingBuffer};
 
 pub trait MaatRing {
     fn accept(&mut self, node: Server);
@@ -17,6 +17,7 @@ pub trait MaatRing {
     fn hash<T: Serializable>(&self, data: &T) -> usize;
 }
 
+#[derive(Debug)]
 pub struct NotFound;
 
 pub trait Serializable {
@@ -60,6 +61,16 @@ struct DefaultMaatRing {
 }
 
 impl DefaultMaatRing {
+    fn new(capacity: usize, replicas: usize) -> DefaultMaatRing {
+        DefaultMaatRing {
+            ring: Box::new(InMemoryRingBuffer::new(capacity)),
+            replicas,
+            node_replicas_indices: HashMap::new(),
+            replica_node_indices: HashMap::new(),
+            node_indices: HashMap::new(),
+        }
+    }
+
     fn pick(&self, nodes: &HashSet<Server>) -> Server {
         if nodes.len() == 1 {
             return nodes.into_iter().next().unwrap().clone();
@@ -150,5 +161,49 @@ impl MaatRing for DefaultMaatRing {
 
     fn hash<T: Serializable>(&self, data: &T) -> usize {
         self.ring.get_hash_fn()(data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::maat_node::Server;
+    use crate::maat_ring::{DefaultMaatRing, MaatRing, Request, Serializable, Wrapper};
+
+    struct Payload {
+        data: String,
+    }
+
+    impl Payload {
+        fn new(data: String) -> Payload {
+            Payload {
+                data
+            }
+        }
+    }
+
+    impl Serializable for Payload {
+        fn serialize(&self) -> String {
+            self.data.clone()
+        }
+    }
+
+    #[test]
+    fn give_maat_ring_when_new_node_join_then_the_request_was_correctly_routed_to_this_node() {
+        //given
+        let mut ring = DefaultMaatRing::new(100, 10);
+        let server = Server::new(
+            String::from("1.1.1.1"),
+            61,
+            true,
+        );
+        ring.accept(server);
+
+        let payload = Payload::new(String::from("test"));
+        let request = Request::of(payload);
+
+        //when
+        let result = ring.route(&request);
+
+        //then
     }
 }

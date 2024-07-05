@@ -18,7 +18,7 @@ pub struct Server {
 }
 
 impl Server {
-    fn new(ip: String, port: usize, is_physical: bool) -> Server {
+    pub fn new(ip: String, port: usize, is_physical: bool) -> Server {
         Server {
             ip,
             port,
@@ -30,7 +30,7 @@ impl Server {
 
 impl Serializable for Server {
     fn serialize(&self) -> String {
-        format!("{}@{}", self.ip, self.port)
+        format!("{}@{}@{}", self.id, self.ip, self.port)
     }
 }
 
